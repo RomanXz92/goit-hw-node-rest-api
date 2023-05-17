@@ -2,11 +2,11 @@
   "name": "homework-03",
   "version": "1.0.0",
   "description": "**Read in other languages: [Russian](README.md), [Ukrainian](README.ua.md).**",
-  "main": "app.js",
+  "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "cross-env NODE_ENV=production node ./server.js",
-    "start:dev": "cross-env NODE_ENV=development nodemon ./server.js"
+    "start": "node server.js",
+    "start:dev": "nodemon server.js"
   },
   "keywords": [],
   "author": "",
