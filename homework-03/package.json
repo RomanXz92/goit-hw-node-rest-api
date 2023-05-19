@@ -2,7 +2,9 @@
   "name": "homework-03",
   "version": "1.0.0",
   "description": "**Read in other languages: [Russian](README.md), [Ukrainian](README.ua.md).**",
-  "main": "server.js",
+  "engines": {
+    "node": ">=16.x"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "cross-env NODE_ENV=production node ./server.js",
