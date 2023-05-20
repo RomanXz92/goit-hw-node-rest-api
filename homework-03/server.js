@@ -1,15 +1,15 @@
-// qOpgtdCd23Ma7ZKf
+// oSN0dPJE6thmh0hV
 
-const app = require('./app');
 const mongoose = require('mongoose');
-const DB_HOST =
-  'mongodb+srv://Roman:qOpgtdCd23Ma7ZKf@cluster0.fukzxmm.mongodb.net/contacts_reader?retryWrites=true&w=majority';
+const app = require('./app');
 
-mongoose.set('strictQuery', true);
+const { DB_HOST, PORT = 4000 } = process.env;
+
 mongoose
   .connect(DB_HOST)
   .then(() => {
-    app.listen(3001, () => console.log('Database connection successful'));
+    app.listen(PORT);
+    console.log('Database connection successful');
   })
   .catch(error => {
     console.log(error.message);
