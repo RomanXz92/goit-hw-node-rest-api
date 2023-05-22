@@ -6,12 +6,12 @@ const { validateBody } = require('../../utils');
 
 router.get('/', contactsControllers.getAllContacts);
 
-router.get('/:id', contactsControllers.getOneContact);
+// router.get('/:id', contactsControllers.getOneContact);
 
-router.post('/', validateBody(schemas.addSchema), contactsControllers.postAddContact);
+// router.post('/', validateBody(schemas.addSchema), contactsControllers.postAddContact);
 
-router.put('/:id', validateBody(schemas.addSchema), contactsControllers.putUpdateContact);
+// router.put('/:id', validateBody(schemas.addSchema), contactsControllers.putUpdateContact);
 
-router.delete('/:id', contactsControllers.removeContact);
+// router.delete('/:id', contactsControllers.removeContact);
 
 module.exports = router;
