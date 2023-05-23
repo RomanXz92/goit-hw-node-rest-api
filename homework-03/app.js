@@ -4,14 +4,14 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-// const contactsRoutes = require("./routes/api/contactsRoutes")
+const contactsRoutes = require('./routes/api/contactsRoutes');
 
 const formatsLogger = app.get('env') === 'development' ? 'dev' : 'short';
 
 app.use(logger(formatsLogger));
 app.use(cors());
 app.use(express.json());
-// app.use("/api/contacts", contactsRoutes)
+app.use('/api/contacts', contactsRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
