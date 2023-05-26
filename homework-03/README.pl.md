@@ -1,72 +1,87 @@
 **Czytaj w innych językach: [rosyjski](README.md), [ukraiński](README.ua.md).**
 
-# Zadanie domowe 3
+# Zadanie domowe 2
 
-Utwórz gałąź `hw03-mongodb` z gałęzi `master`.
+Utwórz fork [repozytorium](https://github.com/goitacademy/nodejs-homework-template) na swoim koncie github.
 
-Kontynuuj tworzenie REST API do pracy ze zbiorem kontaktów.
+Obejrzyj wideo wyjaśniające jak wykonać i oddać pracę domową prawidłowo: [<img src="./js.png" width="640">](https://www.youtube.com/watch?v=wabSW_sz_cM 'Пояснение').
+
+Napisz REST API do pracy ze zbiorem kontaktów. Do pracy z REST API wykorzystaj [Postman](https://www.getpostman.com/).
+
+Przeczytaj uważnie readme w sklonowanym boilerplate, opisany tam został mechanizm oddawania pracy domowej. Zacznij wykonywać zadanie domowe.
 
 ## Krok 1
 
-Stwórz konto na [MongoDB Atlas](https://www.mongodb.com/cloud/atlas), a następnie na koncie utwórz nowy projekt i skonfiguruj **bezpłatny klaster**. W czasie konfigurowania klastera wybierz provider i region, jak na screenshocie poniżej. Jeżeli wybierzesz zbyt oddalony region, serwer odpowie wolniej.
+Utwórz gałąź `hw02-express` z gałęzi master.
 
-![atlas cluster setup](./atlas-cluster.jpg)
+Zainstaluj moduł przy pomocy polecenia:
+
+```bash
+npm i
+```
+
+Następujące moduły są już w projekcie:
+
+- [express](https://www.npmjs.com/package/express)
+- [morgan](https://www.npmjs.com/package/morgan)
+- [cors](https://www.npmjs.com/package/cors)
 
 ## Krok 2
 
-Skonfiguruj edytor graficzny [MongoDB Compass](https://www.mongodb.com/download-center/compass) do wygodnej pracy z bazą danych dla MongoDB. Skonfiguruj podłączenie swojej chmury do Compass. W MongoDB Atlas nie zapomnij utworzyć użytkownika z prawami administratora.
+W app.js – serwer webowy na express, dodane są warstwy `morgan` i `cors`. Zacznij konfigurować routing do pracy ze zbiorem kontaktów.
+
+REST API powinien wspierać następujące routy:
+
+### @ GET /api/contacts
+
+- niczego nie otrzymuje;
+- wywołuje funkcję `listContacts` do pracy z plikiem json `contacts.json`;
+- zwraca tablicę wszystkich kontaktów w formacie json ze statusem `200`.
+
+### @ GET /api/contacts/:id
+
+- Nie otrzymuje `body`;
+– otrzymuje parametr `id`;
+- wywołuje funkcję getById do pracy z plikami json contacts.json;
+- jeżeli takie id istnieje, zwraca obiekt kontaktu w formacie json ze statusem `200`;
+- jeżeli takiego id nie ma, zwraca json z kluczem `"message": "Not found"` i statusem `404`. 
+
+### @ POST /api/contacts
+
+- Otrzymuje `body`w formacie `{name, email, phone}` (wszystkie pola są obowiązkowe);
+- jeśli w body brak jakichś obowiązkowych pól, zwraca json z kluczem `{"message": "missing required name field"}` i statusem `400`;
+- jeśli z `body` wszystko w porządku, dodaje unikalny identyfikator do obiektu kontaktu;
+- wywołuje funkcję `addContact(body)` do zapisania kontaktu w pliku `contacts.json`;
+- w rezultacie pracy funkcji zwraca obiekt z dodanymi `id` `{id, name, email, phone}` i statusem `201`.
+
+### @ DELETE /api/contacts/:id
+
+- Nie otrzymuje `body`;
+- otrzymuje parametr `id`;
+- wywołuje funkcję `removeContact` do pracy z plikiem json `contacts.json`;
+- jeżeli takie `id` istnieje, zwraca formaty json `{"message": "contact deleted"}` ze statusem `200`;
+- jeśli nie ma takiego `id`, zwraca json z kluczem `"message": "Not found"` i statusem `404`. 
+
+### @ PUT /api/contacts/:id
+
+- Otrzymuje parametr `id`; 
+- otrzymuje `body` w formacie json z aktualizacją dowolnych pól `name, email i phone`;
+- jeżeli nie ma `body`, zwraca json z kluczem `{"message": "missing fields"}` i statusem `400`;
+- jeśli z `body` wszystko w porządku, wywołuje funkcję `updateContact(contactId, body)` (napisz ją) dla aktualizacji kontaktu w pliku `contacts.json`;
+- w rezultacie pracy funkcji zwraca zaktualizowany obiekt kontaktu ze statusem `200`. W przeciwnym razie zwraca json z kluczem `"message": "Not found"` i statusem `404`.
 
 ## Krok 3
 
-Przez Compass utwórz bazę danych `db-contacts`, a w niej zbiór `contacts`. Weź [odnośnik do json](./contacts.json) i przy pomocy Compass wypełnij zbiór `contacts` (zaimportuj) jego zawartością.
+Dla tras, które przyjmują dane (`POST` i `PUT`), przemyśl sprawdzenie (walidację) przyjmowanych danych. Do walidacji wykorzystaj pakiet [joi](https://github.com/sideway/joi).
 
-![data](./json-data.png)
+## Kryteria zaliczenia pracy domowej #2-6
 
-Jeżeli wszystko zrobiłeś prawidłowo, dane powinny się pojawić w twojej bazie w zbiorze `contacts`
-
-![data](./mongo-data.png).
-
-## Krok 4
-
-Wykorzystaj kod źródłowy [zadania domowego #2](../homework-02/README.md) i zamień zapisywanie kontaktów z pliku json na utworzoną przez siebie bazę danych.
-
-- Napisz kod do utworzenia podłączenia do MongoDB przy pomocy [Mongoose](https://mongoosejs.com/).
-- Przy sukcesie podłączenia wyprowadź na konsolę wiadomość `"Database connection successful"`.
-- Obowiązkowo opracuj błąd podłączenia. Wyprowadź na konsolę wiadomość o błędzie i zakończ proces, wykorzystując `process.exit(1)`.
-- W funkcjach opracowywania zapytań zamień kod operacji CRUD na kontaktach z pliku, na metody Mongoose do pracy ze zbiorem kontaktów w bazie danych.
-
-Schemat modeli dla zbioru `contacts`:
-
-```js
-  {
-    name: {
-      type: String,
-      required: [true, 'Set name for contact'],
-    },
-    email: {
-      type: String,
-    },
-    phone: {
-      type: String,
-    },
-    favorite: {
-      type: Boolean,
-      default: false,
-    },
-  }
-```
-
-## Krok 5
-
-W naszych kontaktach pojawiło się dodatkowe pole statusu `favorite`, które przyjmuje logiczną wartość `true` lub `false`. Odpowiada ono za to, że wskazany kontakt znajduje się lub nie w ulubionych. Zrealizuj dla aktualizacji statusu kontaktu nową trasę.
-
-### @ PATCH /api/contacts/:id/favorite
-
-- Otrzymuje parametr `contactId`.
-- Otrzymuje `body` w formacie json z aktualizacją pola `favorite`.
-- Jeżeli `body` nie ma, zwraca json z kluczem `{"message": "missing field favorite"}` i statusem `400`.
-- Jeżeli w `body` wszystko się zgadza to wywołaj funkcję `updateStatusContact(contactId, body)` (napisz ją), aby zaktualizować kontakt w bazie danych
-- W wyniku pracy funkcji zwraca zaktualizowany obiekt kontaktu ze statusem `200`. W przeciwnym razie zwraca json z kluczem `"message": "Not found"` i statusem `404`.
-
-
-Dla routa `POST /api/contacts` wprowadź zmiany: jeśli pole `favorite` nie zostało wskazane w `body`, to przy zapisaniu w bazie nowego kontaktu ustaw pole `favorite` domyślnie w `false`. Nie zapominajmy o walidacji danych!
+- Utworzone zostało repozytorium z pracą domową  &mdash; aplikacja REST API.
+- Przy utworzeniu repozytorium wykorzystuje się [boilerplate](https://github.com/goitacademy/nodejs-homework-template).
+- Pull request (PR) z odpowiednią pracą domową został wysłany do mentora w [schoology](https://app.schoology.com/login) w celu sprawdzenia (odnośnik do PR).
+- Kod odpowiada technicznemu zadaniu projektu.
+- Przy wykonaniu kodu nie pojawiają się nieopracowane błędy.
+- Nazwy zmiennych, właściwości i metod zaczynają się z małej litery i zapisane zostały w notacji CamelCase. Wykorzystywane są angielskie rzeczowniki.
+- Nazwy funkcji lub metod zawierają czasownik.
+- W kodzie nie ma komentarzy dodanych do fragmentów kodu.
+- Projekt działa poprawnie w aktualnej wersji LTS Node.
