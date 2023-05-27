@@ -1,63 +1,173 @@
 **Read in other languages: [Russian](README.md), [Ukrainian](README.ua.md).**
 
-# Homework 5
+# Homework 4
 
-Create the `hw05-avatars` branch from the `master` branch.
+Create a `hw04-auth` branch from the `master` branch.
 
-Continue building a REST API to work with the contact collection. Add the ability to upload the user's avatar via [Multer](https://github.com/expressjs/multer).
+Continue building a REST API to work with the contact collection. Add user authentication/authorization logic using [JWT](https://jwt.io/).
 
 ## Step 1
 
-Create a folder `public` for distribution of statics. In this folder make a folder `avatars`. Set up Express to serve static files from the `public` folder.
+In code, create a user schema and model for the `users` collection.
 
-Put any image in the `public/avatars` folder and check that the static distribution works. When you navigate to such a URL, the browser will display the image.
-
-```shell
-http://localhost:<port>/avatars/<filename with extension>
+```js
+{
+  password: {
+    type: String,
+    required: [true, 'Password is required'],
+  },
+  email: {
+    type: String,
+    required: [true, 'Email is required'],
+    unique: true,
+  },
+  subscription: {
+    type: String,
+    enum: ["starter", "pro", "business"],
+    default: "starter"
+  },
+  token: {
+    type: String,
+    default: null,
+  },
+}
 ```
+
+For each user to work and see only their contacts in the contact scheme, add the `owner` property.
+
+```js
+    owner: {
+      type: Schema.Types.ObjectId,
+      ref: 'user',
+    }
+```
+Note: `'user'` is the name of the collection (singular) in which users are stored.
 
 ## Step 2
 
-Add a new `avatarURL` property to the user schema to hold the image.
+### Registration
+
+Create an endpoint [`/users/signup`](#registration-request).
+
+Validate all required fields (`email` and `password`). Return on validation error
+[Validation error](#registration-validation-error).
+
+In case of successful validation in the `User` model, create a user according to the data that has passed validation. For password salting use [bcrypt](https://www.npmjs.com/package/bcrypt) or [bcryptjs](https://www.npmjs.com/package/bcryptjs).
+
+- If the mail is already in use by someone else, return [Error Conflict](#registration-conflict-error).
+- Otherwise return [Successful response](#registration-success-response).
+
+#### Registration Request
 
 ```shell
-{
-  ...
-  avatarURL: String,
-  ...
+POST /users/signup
+Content-Type: application/json
+RequestBody: {
+  "email": "example@example.com",
+  "password": "examplepassword"
 }
 ```
 
-- Use the package [gravatar](https://www.npmjs.com/package/gravatar) to immediately generate an avatar for him by his `email` when registering a new user.
-
-## Step 3
-
-When registering a user:
-
-- Create a link to the user's avatar with [gravatar](https://www.npmjs.com/package/gravatar)
-- Save the resulting URL in the `avatarURL` field during user creation
-
-## Step 4
-
-Add the ability to update the avatar by creating an endpoint `/users/avatars` and using the `PATCH` method.
-
-![avatar upload from postman](./avatar-upload.png)
+#### Registration Validation Error
 
 ```shell
-# Request
-PATCH /users/avatars
-Content-Type: multipart/form-data
-Authorization: "Bearer {{token}}"
-RequestBody: uploaded file
+Status: 400 Bad Request
+Content-Type: application/json
+ResponseBody: <Error from Joi or another validation library>
+```
 
-# Successful response
+#### Registration Conflict Error
+
+```shell
+Status: 409 Conflict
+Content-Type: application/json
+ResponseBody: {
+  "message": "Email in use"
+}
+```
+
+#### Registration Success Response
+
+```shell
+Status: 201 Created
+Content-Type: application/json
+ResponseBody: {
+  "user": {
+    "email": "example@example.com",
+    "subscription": "starter"
+  }
+}
+```
+
+### Login
+
+Create an endpoint [`/users/login`](#login-request)
+
+In the `User` model, find the user by `email`.
+
+Validate all required fields (`email` and `password`). If validation fails, return [Validation Error](#validation-error-login).
+
+- Otherwise, compare password for found user, if passwords match create token, store in current user and return a [Successful response](#login-success-response).
+
+- If password or email is incorrect, return [Error Unauthorized](#login-auth-error).
+
+#### Login request
+
+```shell
+POST /users/login
+Content-Type: application/json
+RequestBody: {
+  "email": "example@example.com",
+  "password": "examplepassword"
+}
+```
+
+#### Login validation error
+
+```shell
+Status: 400 Bad Request
+Content-Type: application/json
+ResponseBody: <Error from Joi or another validation library>
+```
+
+#### Login success response
+
+```shell
 Status: 200 OK
 Content-Type: application/json
 ResponseBody: {
-  "avatarURL": "image link goes here"
+  "token": "exampletoken",
+  "user": {
+    "email": "example@example.com",
+    "subscription": "starter"
+  }
 }
+```
 
-# Unsuccessful response
+#### Login auth error
+
+```shell
+Status: 401 Unauthorized
+ResponseBody: {
+  "message": "Email or password is wrong"
+}
+```
+
+## Step 3
+
+### Checking the token
+
+Create a middleware to validate the token and add it to all routes that need to be secured.
+
+- Middleware takes the token from the `Authorization` headers, checks the token for validity
+- Return [Unauthorized Error](#middleware-unauthorized-error) on error
+- If the validation was successful, get the user's `id` from the token. Find a user in the database by this id
+- If the user exists and the token matches what is in the database, write his data to `req.user` and call the `next()` method
+- If no user with that `id` exists or tokens don't match, return [Unauthorized Error](#middleware-unauthorized-error)
+
+#### Middleware unauthorized error
+
+```shell
 Status: 401 Unauthorized
 Content-Type: application/json
 ResponseBody: {
@@ -65,20 +175,81 @@ ResponseBody: {
 }
 ```
 
-- Create a tmp folder in the root of the project and save the uploaded avatar to it
-- Process the avatar with the [jimp] package (https://www.npmjs.com/package/jimp) and set its dimensions to 250 by 250
-- Move the user's avatar from the tmp folder to the `public/avatars` folder and give it a unique name for the specific user
-- The resulting `URL` is `/avatars/<file name with extension>`, save it in the user's `avatarURL` field
+## Step 4
 
+### Logout
+
+Create an endpoint [`/users/logout`](#logout-request)
+
+Add token verification middleware to the route.
+
+- In the `User` model, find the user by `_id`
+- If the user does not exist, return [Error Unauthorized](#logout-unauthorized-error)
+- Otherwise, delete the token in the current user and return [Successful response](#logout-success-response)
+
+#### Logout Request
+
+```shell
+GET /users/logout
+Authorization: "Bearer {{token}}"
+```
+
+#### Logout Unauthorized Error
+
+```shell
+Status: 401 Unauthorized
+Content-Type: application/json
+ResponseBody: {
+  "message": "Not authorized"
+}
+```
+
+#### Logout Success Response
+
+```shell
+Status: 204 No Content
+```
+
+## Step 5
+### Current User - Get User Data by Token
+
+Create an endpoint [`/users/current`](#current-user-request)
+
+Add token verification middleware to the route.
+
+- If user does not have return [Error Unauthorized](#current-user-unauthorized-error)
+- Otherwise, return [Successful response](#current-user-success-response)
+
+#### Current User Request
+
+```shell
+GET /users/current
+Authorization: "Bearer {{token}}"
+```
+
+#### Current User Unauthorized Error
+
+```shell
+Status: 401 Unauthorized
+Content-Type: application/json
+ResponseBody: {
+  "message": "Not authorized"
+}
+```
+
+#### Current User Success Response
+
+```shell
+Status: 200 OK
+Content-Type: application/json
+ResponseBody: {
+  "email": "example@example.com",
+  "subscription": "starter"
+}
+```
 
 ## Additional Task - Optional
 
-### 1. Write Unit Tests for the Login Controler (login/signin)
-
-Using [Jest](https://jestjs.io/ru/docs/getting-started)
-
-- Response must have status code 200
-- The token must be returned in the response
-- The response should return a `user` object with 2 fields `email` and `subscription`, having the data type `String`
-
-
+- Make pagination for the collection of contacts (GET /contacts?page=1&limit=20)
+- Filter contacts by favorite field (GET /contacts?favorite=true)
+- Updating a user's `subscription` via the `PATCH` `/users` endpoint. The subscription must have one of the following values `['starter', 'pro', 'business']`
