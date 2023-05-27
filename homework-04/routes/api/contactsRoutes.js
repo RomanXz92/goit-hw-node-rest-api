@@ -5,7 +5,7 @@ const { validateBody } = require('../../utils');
 const { authentificate, isValidId } = require('../../middleWares');
 const router = express.Router();
 
-// router.use(authentificate);
+router.use(authentificate);
 
 router.get('/', contactsControllers.getAllContacts);
 
