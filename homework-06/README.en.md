@@ -1,125 +1,74 @@
 **Read in other languages: [Russian](README.md), [Ukrainian](README.ua.md).**
 
-# Homework 6
+# Homework 4
 
-Create branch `hw06-email` from branch `master`.
+Create a `hw04-auth` branch from the `master` branch.
 
-We continue to create a REST API for working with a collection of contacts. Add user email verification after registration using the [SendGrid](https://sendgrid.com/) service.
-
-## How the Verification Process Should Work
-
-1. After registration, the user should receive a letter to the email address specified during registration with a link to verify his email
-2. After clicking the link in the received email for the first time, the user should receive a [Response with status 200](#verification-success-response), which will imply successful email verification
-3. After clicking on the link again, the user should get [Error with status 404](#verification-user-not-found)
+Continue building a REST API to work with the contact collection. Add user authentication/authorization logic using [JWT](https://jwt.io/).
 
 ## Step 1
 
-### Preparing Integration with SendGrid API
-
-- Register at [SendGrid](https://sendgrid.com/)
-- Create an email sender. To do this, in the SendGrid administrative panel, go to the Marketing menu in the senders submenu and click the "Create New Sender" button in the upper right corner. Fill in the required fields in the proposed form. Save. You should get the following result as in the picture, only with your email instead.
-
-![sender](sender-not-verify.png)
-
-A verification email should be sent to the specified email address (check spam if you don't see the email). Click on the link in it and complete the process. The result should change to:
-
-![sender](sender-verify.png)
-
-- Now you need to create an API access token. Select the "Email API" menu, and the "Integration Guide" submenu. Here we select "Web API"
-
-![api-key](web-api.png)
-
-Next, you need to select the Node.js technology
-
-![api-key](node.png)
-
-In the third step, we give a name to our token. For example systemcats, we press the generate button and we get the result as in the screenshot below. You need to copy this token (this is important because you won't be able to see it anymore). After completing the token creation process:
-
-![api-key](api-key.png)
-
-- The resulting API token must be added to the `.env` file in our project
-
-## Step 2
-
-### Create an Endpoint for Email Verification
-
-- Add two fields `verificationToken` and `verify` to the `User` model. A value of the `verify` field equal to `false` will mean that his email has not been verified yet.
+In code, create a user schema and model for the `users` collection.
 
 ```js
 {
-  verify: {
-    type: Boolean,
-    default: false,
-  },
-  verificationToken: {
+  password: {
     type: String,
-    required: [true, 'Verify token is required'],
+    required: [true, 'Password is required'],
+  },
+  email: {
+    type: String,
+    required: [true, 'Email is required'],
+    unique: true,
+  },
+  subscription: {
+    type: String,
+    enum: ["starter", "pro", "business"],
+    default: "starter"
+  },
+  token: {
+    type: String,
+    default: null,
   },
 }
 ```
 
-- Create a GET [`/users/verify/:verificationToken`](#verification-request) endpoint, where we will search for a user in the `User` model by the `verificationToken` parameter.
-- If user with such token is not found, return [Error 'Not Found'](#verification-user-not-found)
-- If the user is found - set `verificationToken` to `null`, and set the `verify` field to `true` in the user document and return [Successful response](#verification-success-response)
+For each user to work and see only their contacts in the contact scheme, add the `owner` property.
 
-### Verification Request
-
-```shell
-GET /users/verify/:verificationToken
+```js
+    owner: {
+      type: Schema.Types.ObjectId,
+      ref: 'user',
+    }
 ```
+Note: `'user'` is the name of the collection (singular) in which users are stored.
 
-### Verification User Not Found
+## Step 2
 
-```shell
-Status: 404 Not Found
-ResponseBody: {
-  message: 'User not found'
-}
-```
+### Registration
 
-### Verification Success Response
+Create an endpoint [`/users/signup`](#registration-request).
 
-```shell
-Status: 200 OK
-ResponseBody: {
-  message: 'Verification successful',
-}
-```
+Validate all required fields (`email` and `password`). Return on validation error
+[Validation error](#registration-validation-error).
 
-## Step 3
+In case of successful validation in the `User` model, create a user according to the data that has passed validation. For password salting use [bcrypt](https://www.npmjs.com/package/bcrypt) or [bcryptjs](https://www.npmjs.com/package/bcryptjs).
 
-### Adding an Email to the User with a Verificaton Link
+- If the mail is already in use by someone else, return [Error Conflict](#registration-conflict-error).
+- Otherwise return [Successful response](#registration-success-response).
 
-When creating a user during registration:
-
-- Create a `verificationToken` for the user and write it to the database (to generate a token, use the package [uuid](https://www.npmjs.com/package/uuid) or [nanoid](https://www.npmjs.com /package/nanoid))
-- Send an email to the user's mail and specify a link to verify the email (`/users/verify/:verificationToken`) in the message
-- It is also necessary to take into account that now the user login is not allowed with an unverified email
-
-## Step 4
-
-### Adding a Resend Email to the User with a Verification Link
-
-It is necessary to provide for the option that the user can accidentally delete the letter. It may not reach the addressee for some reason. Our service for sending letters during registration gave an error, etc.
-
-#### @ POST /users/verify/
-
-- Gets `body` in `{ email }` format
-- If there is no required field `email` in `body`, returns JSON with key `{"message": "missing required field email"}` and status `400`
-- If everything is fine with `body`, resend the letter with `verificationToken` to the specified email, but only if the user is not verified
-- If the user has already passed verification, send json with the key `{ message: "Verification has already been passed"}` with status `400 Bad Request`
-
-#### Resending an Email Request
+#### Registration Request
 
 ```shell
-POST /users/verify
+POST /users/signup
 Content-Type: application/json
 RequestBody: {
-  "email": "example@example.com"
+  "email": "example@example.com",
+  "password": "examplepassword"
 }
 ```
 
-#### Resending an Email Validation Error
+#### Registration Validation Error
 
 ```shell
 Status: 400 Bad Request
@@ -127,28 +76,180 @@ Content-Type: application/json
 ResponseBody: <Error from Joi or another validation library>
 ```
 
-#### Resending an Email Success Response
+#### Registration Conflict Error
 
 ```shell
-Status: 200 Ok
+Status: 409 Conflict
 Content-Type: application/json
 ResponseBody: {
-  "message": "Verification email sent"
+  "message": "Email in use"
 }
 ```
 
-#### Resend Email for Verified User
+#### Registration Success Response
+
+```shell
+Status: 201 Created
+Content-Type: application/json
+ResponseBody: {
+  "user": {
+    "email": "example@example.com",
+    "subscription": "starter"
+  }
+}
+```
+
+### Login
+
+Create an endpoint [`/users/login`](#login-request)
+
+In the `User` model, find the user by `email`.
+
+Validate all required fields (`email` and `password`). If validation fails, return [Validation Error](#validation-error-login).
+
+- Otherwise, compare password for found user, if passwords match create token, store in current user and return a [Successful response](#login-success-response).
+
+- If password or email is incorrect, return [Error Unauthorized](#login-auth-error).
+
+#### Login request
+
+```shell
+POST /users/login
+Content-Type: application/json
+RequestBody: {
+  "email": "example@example.com",
+  "password": "examplepassword"
+}
+```
+
+#### Login validation error
 
 ```shell
 Status: 400 Bad Request
 Content-Type: application/json
+ResponseBody: <Error from Joi or another validation library>
+```
+
+#### Login success response
+
+```shell
+Status: 200 OK
+Content-Type: application/json
 ResponseBody: {
-  message: "Verification has already been passed"
+  "token": "exampletoken",
+  "user": {
+    "email": "example@example.com",
+    "subscription": "starter"
+  }
 }
 ```
 
-> Note: As an alternative to SendGrid, you can use the [nodemailer] package(https://www.npmjs.com/package/nodemailer)
+#### Login auth error
+
+```shell
+Status: 401 Unauthorized
+ResponseBody: {
+  "message": "Email or password is wrong"
+}
+```
+
+## Step 3
+
+### Checking the token
+
+Create a middleware to validate the token and add it to all routes that need to be secured.
+
+- Middleware takes the token from the `Authorization` headers, checks the token for validity
+- Return [Unauthorized Error](#middleware-unauthorized-error) on error
+- If the validation was successful, get the user's `id` from the token. Find a user in the database by this id
+- If the user exists and the token matches what is in the database, write his data to `req.user` and call the `next()` method
+- If no user with that `id` exists or tokens don't match, return [Unauthorized Error](#middleware-unauthorized-error)
+
+#### Middleware unauthorized error
+
+```shell
+Status: 401 Unauthorized
+Content-Type: application/json
+ResponseBody: {
+  "message": "Not authorized"
+}
+```
+
+## Step 4
+
+### Logout
+
+Create an endpoint [`/users/logout`](#logout-request)
+
+Add token verification middleware to the route.
+
+- In the `User` model, find the user by `_id`
+- If the user does not exist, return [Error Unauthorized](#logout-unauthorized-error)
+- Otherwise, delete the token in the current user and return [Successful response](#logout-success-response)
+
+#### Logout Request
+
+```shell
+GET /users/logout
+Authorization: "Bearer {{token}}"
+```
+
+#### Logout Unauthorized Error
+
+```shell
+Status: 401 Unauthorized
+Content-Type: application/json
+ResponseBody: {
+  "message": "Not authorized"
+}
+```
+
+#### Logout Success Response
+
+```shell
+Status: 204 No Content
+```
+
+## Step 5
+### Current User - Get User Data by Token
+
+Create an endpoint [`/users/current`](#current-user-request)
+
+Add token verification middleware to the route.
+
+- If user does not have return [Error Unauthorized](#current-user-unauthorized-error)
+- Otherwise, return [Successful response](#current-user-success-response)
+
+#### Current User Request
+
+```shell
+GET /users/current
+Authorization: "Bearer {{token}}"
+```
+
+#### Current User Unauthorized Error
+
+```shell
+Status: 401 Unauthorized
+Content-Type: application/json
+ResponseBody: {
+  "message": "Not authorized"
+}
+```
+
+#### Current User Success Response
+
+```shell
+Status: 200 OK
+Content-Type: application/json
+ResponseBody: {
+  "email": "example@example.com",
+  "subscription": "starter"
+}
+```
 
 ## Additional Task - Optional
 
-### 1. Write a dockerfile for your application
+- Make pagination for the collection of contacts (GET /contacts?page=1&limit=20)
+- Filter contacts by favorite field (GET /contacts?favorite=true)
+- Updating a user's `subscription` via the `PATCH` `/users` endpoint. The subscription must have one of the following values `['starter', 'pro', 'business']`
