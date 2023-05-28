@@ -1,125 +1,74 @@
 **Leer en otros idiomas: [Русский](README.md), [Українська](README.ua.md).**
 
-# Tarea 6
+# Tarea 4
 
-Crea una rama `hw06-email` de la rama `master`.
+Crea una rama `hw04-auth` de la rama `master`.
 
-Continuamos construyendo la API REST para la manipulación de colecciones de contactos. Añade la verificación del email del usuario después de registrarse, mediante el servicio [SendGrid](https://sendgrid.com/).
-
-## Cómo debe funcionar el proceso de verificación
-
-1. Después de registrarse, el usuario debería recibir un mensaje de correo electrónico en la dirección facilitada durante el registro con un enlace para verificar su email
-2. Al seguir el enlace en el correo recibido la primera vez, el usuario debería recibir una [Respuesta con el estado 200](#verification-success-response), lo que significaría la verificación exitosa del correo electrónico
-3. Al seguir de nuevo el enlace, el usuario debería recibir [Error con el estado 404](#verification-user-not-found)
+Continúe con la creación de una API REST para manejar la colección de contactos. Añadir la lógica de autenticación/autorización de usuarios mediante [JWT](https://jwt.io/).
 
 ## Paso 1
 
-### Preparando la integración con SendGrid API
-
-- Regístrate en [SendGrid](https://sendgrid.com/).
-- Crea un remitente de correo electrónico. Para ello, en el panel de administración de SendGrid, vaya al menú Marketing en el submenú senders y en la esquina superior derecha haz clic en "Create New Sender". Rellena los campos obligatorios del formulario propuesto. Guárdalo. Deberías obtener el siguiente resultado como en la imagen, sólo que con tu email:
-
-![sender](sender-not-verify.png)
-
-Debería enviarse un correo de verificación al email especificado (comprueba el correo no deseado si no lo ves). Haz clic en el enlace que aparece en él y completa el proceso. El resultado debería cambiar a:
-
-![sender](sender-verify.png)
-
-- Ahora necesitas crear un token de acceso a la API. Selecciona el menú "Email API" y el submenú "Integration Guide". Aquí seleccione "Web API"
-
-![api-key](web-api.png)
-
-A continuación, seleccione la tecnología Node.js
-
-![api-key](node.png)
-
-En el tercer paso, le damos un nombre a nuestro token. Por ejemplo, systemcats, pulse el botón de generar y obtenga el resultado como se muestra en la captura de pantalla siguiente. Tienes que copiar este token (esto es importante porque no podrás volver a verlo). Después de completar el proceso de creación del token
-
-![api-key](api-key.png)
-
-- El token de la API obtenido debe añadirse al archivo `.env` de nuestro proyecto
-
-## Paso 2
-
-### Creación de un endpoint para la verificación del email
-
-- añade dos campos `verificationToken` y `verify` al modelo `User`. Si el valor del campo `verify` igual a `false` significa que su correo electrónico aún no ha sido verificado.
+En el código, crea un esquema y un modelo de usuario para la colección `users`.
 
 ```js
 {
-  verify: {
-    type: Boolean,
-    default: false,
-  },
-  verificationToken: {
+  password: {
     type: String,
-    required: [true, 'Verify token is required'],
+    required: [true, 'Password is required'],
+  },
+  email: {
+    type: String,
+    required: [true, 'Email is required'],
+    unique: true,
+  },
+  subscription: {
+    type: String,
+    enum: ["starter", "pro", "business"],
+    default: "starter"
+  },
+  token: {
+    type: String,
+    default: null,
   },
 }
 ```
 
-- crea el endpoint GET [`/users/verify/:verificationToken`](#verification-request), donde para buscar un usuario en el modelo `User` se utilizaremos el parámetro `verificationToken`
-- si no se encuentra un usuario con este token, debe devolver [Error 'Not Found'](#verification-user-not-found)
-- si el usuario es encontrado, se establece `verificationToken` a `null` y se establece el campo `verify` a `true` en el documento del usuario, y se devuelve [Respuesta exitosa](#verification-success-response)
+Para que cada usuario funcione y vea sólo sus propios contactos en el esquema de contactos, añada la propiedad `owner`.
 
-### Verification request
-
-```shell
-GET /users/verify/:verificationToken
+```js
+    owner: {
+      type: Schema.Types.ObjectId,
+      ref: 'user',
+    }
 ```
+Nota: `'user'` es el nombre de la colección (única) en la que se almacenan los usuarios.
 
-### Verification user Not Found
+## Paso 2
 
-```shell
-Status: 404 Not Found
-ResponseBody: {
-  message: 'User not found'
-}
-```
+### Registro
 
-### Verification success response
+Crea el endpoint [`/users/signup`](#registration-request)
 
-```shell
-Status: 200 OK
-ResponseBody: {
-  message: 'Verification successful',
-}
-```
+Valida todos los campos obligatorios (`email` y `password`). Si se produce un error de validación, devuelve
+[error de validación](#registration-validation-error).
 
-## Paso 3
+Si la validación es exitosa en el modelo `User`, crea un usuario basado en los datos validados. Para ponerle sal a las contraseñas, utilice [bcrypt](https://www.npmjs.com/package/bcrypt) o [bcryptjs](https://www.npmjs.com/package/bcryptjs)
 
-### Añadir el correo electrónico al usuario con un enlace de verificación
+- Si el correo ya está en uso por otra persona, devuelve [Error Conflict](#registration-conflict-error).
+- En caso contrario, devuelve [Respuesta exitosa](#registration-success-response).
 
-Al crear un usuario durante el registro:
-
-- se crea `verificationToken` para el usuario y se escribe en la base de datos (para generar el token, utilice el paquete [uuid](https://www.npmjs.com/package/uuid) o [nanoid](https://www.npmjs.com/package/nanoid))
-- Se envía un correo electrónico al usuario y se proporciona un enlace para verificar el email (`/users/verify/:verificationToken`) en el mensaje
-- También hay que tener en cuenta que ahora no se permite el inicio de sesión del usuario si el correo electrónico no está verificado
-
-## Paso 4
-
-### Realizar un reenvío del correo al usuario con el enlace de verificación
-
-Es posible que el usuario pueda borrar accidentalmente el correo electrónico. Puede que no llegue al destinatario por alguna razón, o que nuestro servicio de envío de correos electrónicos haya tenido un error durante el registro, etc.
-
-#### @ POST /users/verify/
-
-- Recibe `body` en formato `{ email }`
-- Si en `body` no existe el campo obligatorio `email`, devuelve un json con la llave `{"message": "missing required field email"}` y el estado `400`
-- Si en `body` todo está bien, reenviamos el correo electrónico con un `verificationToken` al email especificado, pero sólo si el usuario no está verificado
-- Si el usuario ya ha sido verificado, envía un json con la llave `{ message: "Verification has already been passed"}` con el estado `400 Bad Request`
-
-#### Resending a email request
+#### Registration request
 
 ```shell
-POST /users/verify
+POST /users/signup
 Content-Type: application/json
 RequestBody: {
-  "email": "example@example.com"
+  "email": "example@example.com",
+  "password": "examplepassword"
 }
 ```
 
-#### Resending a email validation error
+#### Registration validation error
 
 ```shell
 Status: 400 Bad Request
@@ -127,29 +76,179 @@ Content-Type: application/json
 ResponseBody: <Error de Joi u otra biblioteca de validación>
 ```
 
-#### Resending a email success response
+#### Registration conflict error
 
 ```shell
-Status: 200 Ok
+Status: 409 Conflict
 Content-Type: application/json
 ResponseBody: {
-  "message": "Verification email sent"
+  "message": "Email in use"
 }
 ```
 
-#### Resend email for verified user
+#### Registration success response
+
+```shell
+Status: 201 Created
+Content-Type: application/json
+ResponseBody: {
+  "user": {
+    "email": "example@example.com",
+    "subscription": "starter"
+  }
+}
+```
+
+### Login
+
+Crea el endpoint [`/users/login`](#login-request)
+
+En el modelo `User`, busca el usuario por `email`.
+
+Valide todos los campos obligatorios (`email` y `password`). Si la validación falla, devuelve [Error de validación](#validation-error-login).
+
+- En caso contrario, compara la contraseña del usuario encontrado, si las contraseñas coinciden crea un token, guárdalo en el usuario actual y devuelve [Respuesta exitosa](#login-success-response).
+- Si la contraseña o el correo electrónico son incorrectos, devuelve [Error Unauthorized](#login-auth-error).
+
+#### Login request
+
+```shell
+POST /users/login
+Content-Type: application/json
+RequestBody: {
+  "email": "example@example.com",
+  "password": "examplepassword"
+}
+```
+
+#### Login validation error
 
 ```shell
 Status: 400 Bad Request
 Content-Type: application/json
+ResponseBody: <Error de Joi u otra biblioteca de validación>
+```
+
+#### Login success response
+
+```shell
+Status: 200 OK
+Content-Type: application/json
 ResponseBody: {
-  message: "Verification has already been passed"
+  "token": "exampletoken",
+  "user": {
+    "email": "example@example.com",
+    "subscription": "starter"
+  }
 }
 ```
 
-> Nota: Como alternativa a SendGrid, puede utilizar el paquete [nodemailer](https://www.npmjs.com/package/nodemailer)
+#### Login auth error
+
+```shell
+Status: 401 Unauthorized
+ResponseBody: {
+  "message": "Email or password is wrong"
+}
+```
+
+## Paso 3
+
+### Comprobación del token
+
+Crea un middleware para comprobar el token y añádelo a todas las rutas que deban ser protegidas.
+
+- El middleware toma el token de los encabezados de `Authorization`, comprueba la validez del token.
+- En caso de error, devuelve [Error Unauthorized](#middleware-unauthorized-error).
+- Si la validación es exitosa, recupera el `id` del usuario del token. Encuentra el usuario en la base de datos a partir de este ID. 
+- Si el usuario existe y el token coincide con el de la base de datos, escribe sus datos en `req.user` y llama al método `next()`. 
+- Si el usuario con este `id` no existe o los tokens no coinciden, devuelve [Error Unauthorized](#middleware-unauthorized-error)
+
+#### Middleware unauthorized error
+
+```shell
+Status: 401 Unauthorized
+Content-Type: application/json
+ResponseBody: {
+  "message": "Not authorized"
+}
+```
+
+## Paso 4
+
+### Logout
+
+Crea el endpoint [`/users/logout`](#logout-request)
+
+Añade a la ruta el middleware para la comprobacióon de tokens.
+
+- En el modelo `User`, busca el usuario por `_id`.
+- Si el usuario no existe, devuelve [Error Unauthorized](#logout-unauthorized-error).
+- En caso contrario, elimina el token en el usuario actual y devuelve [Respuesta exitosa](#logout-success-response).
+
+#### Logout request
+
+```shell
+GET /users/logout
+Authorization: "Bearer {{token}}"
+```
+
+#### Logout unauthorized error
+
+```shell
+Status: 401 Unauthorized
+Content-Type: application/json
+ResponseBody: {
+  "message": "Not authorized"
+}
+```
+
+#### Logout success response
+
+```shell
+Status: 204 No Content
+```
+
+## Paso 5
+### Usuario actual. Recuperar los datos del usuario según el token
+
+Crea el endpoint [`/users/current`](#current-user-request)
+
+Añade a la ruta el middleware para la comprobacióon de tokens.
+
+- Si el usuario no existe, devuelve [Error Unauthorized](#current-user-unauthorized-error)
+- EN caso contrario devuelve [Respuesta exitosa](#current-user-success-response)
+
+#### Current user request
+
+```shell
+GET /users/current
+Authorization: "Bearer {{token}}"
+```
+
+#### Current user unauthorized error
+
+```shell
+Status: 401 Unauthorized
+Content-Type: application/json
+ResponseBody: {
+  "message": "Not authorized"
+}
+```
+
+#### Current user success response
+
+```shell
+Status: 200 OK
+Content-Type: application/json
+ResponseBody: {
+  "email": "example@example.com",
+  "subscription": "starter"
+}
+```
 
 ## Tarea adicional (opcional)
 
-### 1. Escriba un dockerfile para su aplicación
-
+- Hacer una paginación de la colección de contactos (GET /contacts?page=1&limit=20).
+- Filtra los contactos por favoritos (GET /contacts?favorite=true)
+- Renovación de la suscripción (`subscription`) del usuario a travez del endpoint `PATCH` `/users`. La suscripción debe tener uno de los siguientes valores `['starter', 'pro', 'business']`
